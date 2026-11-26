@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#17251f"><meta name="description" content="WIATOMAT — projektant i kalkulator wiat">
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg">
+<title>WIATOMAT</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="brand">WIATOMAT <small>PROJEKTANT WIAT</small></div><div class="head-actions"><button id="saveBtn">Zapisz</button><button id="exportBtn">Eksport projektu</button></div></header>
+<main>
+<section class="intro"><div><h1>Twój projekt wiaty</h1><p>Model 3D • konfiguracja • zestawienie materiałów</p></div><span class="pill">WERSJA STARTOWA 0.1</span></section>
+<div class="workspace">
+<section class="viewer card">
+ <div class="viewer-head"><b>Model 3D</b><div><button id="resetView">Widok początkowy</button><button id="explodeBtn">Animacja montażu</button></div></div>
+ <div id="stage"><div class="loading" id="loading">Ładowanie modelu 3D…</div></div>
+ <div class="viewer-foot"><span>Przeciągnij, aby obrócić • scroll/szczypanie, aby przybliżyć • dotknij elementu, aby go wybrać</span><span id="selectedLabel">Nie wybrano elementu</span></div>
+</section>
+<aside class="card controls">
+ <nav class="tabs"><button class="tab active" data-tab="geometry">Konstrukcja</button><button class="tab" data-tab="element">Element</button><button class="tab" data-tab="cost">Kosztorys</button></nav>
+ <div class="panel active" id="geometry">
+  <h2>Wymiary wiaty</h2>
+  <div class="fields two">
+   <label>Długość (cm)<input id="length" type="number" value="900" min="100"></label>
+   <label>Szerokość (cm)<input id="width" type="number" value="600" min="100"></label>
+   <label>Wysokość wyższej strony (cm)<input id="high" type="number" value="240" min="100"></label>
+   <label>Wysokość niższej strony (cm)<input id="low" type="number" value="210" min="100"></label>
+   <label>Liczba rzędów słupów<input id="rows" type="number" value="2" min="1" max="10"></label>
+   <label>Słupy w rzędzie<input id="cols" type="number" value="4" min="1" max="20"></label>
+   <label>Przekrój słupów (cm)<input id="postSize" type="number" value="12" min="4"></label>
+   <label>Przekrój belek (cm)<input id="beamSize" type="number" value="12" min="4"></label>
+   <label>Przekrój krokwi (cm)<input id="rafterW" type="number" value="7" min="3"></label>
+   <label>Wysokość krokwi (cm)<input id="rafterH" type="number" value="14" min="3"></label>
+   <label>Rozstaw krokwi (cm)<input id="rafterStep" type="number" value="80" min="30"></label>
+   <label>Rozstaw łat (cm)<input id="battenStep" type="number" value="35" min="15"></label>
+  </div>
+  <div class="actions"><button class="primary" id="buildBtn">Przebuduj model 3D</button></div>
+  <p class="hint">Układ bazowy: dach jednospadowy, dowolna liczba rzędów i słupów. Rozmieszczenie automatyczne; wybrane słupy można korygować ręcznie.</p>
+  <h3>Elementy widoku</h3><div class="checks"><label><input type="checkbox" id="showPosts" checked> Słupy</label><label><input type="checkbox" id="showBeams" checked> Belki</label><label><input type="checkbox" id="showRafters" checked> Krokwie</label><label><input type="checkbox" id="showBattens" checked> Łaty</label></div>
+ </div>
+ <div class="panel" id="element">
+  <h2>Wybrany element</h2><p id="noSelection" class="hint">Wybierz element bezpośrednio na modelu 3D.</p>
+  <div id="elementEditor" hidden>
+   <div class="selected-title" id="elementName"></div>
+   <div class="fields two">
+    <label>Pozycja X (cm)<input id="posX" type="number"></label>
+    <label>Pozycja Y (cm)<input id="posY" type="number"></label>
+    <label>Pozycja Z (cm)<input id="posZ" type="number"></label>
+    <label>Przesunięcie wysokości (cm)<input id="offsetZ" type="number" value="0"></label>
+   </div>
+   <div class="actions"><button class="primary" id="applyMove">Zastosuj położenie</button><button id="duplicateBtn">Duplikuj</button></div>
+   <p class="hint">Edycja położenia dotyczy wybranego elementu. Po przebudowaniu modelu ręczne zmiany mogą zostać zastąpione.</p>
+  </div>
+ </div>
+ <div class="panel" id="cost">
+  <h2>Zestawienie orientacyjne</h2><div id="summary" class="summary"></div>
+  <div class="fields two">
+   <label>Cena drewna (zł/m³)<input id="woodPrice" type="number" value="2000"></label>
+   <label>Zapas materiału (%)<input id="waste" type="number" value="10"></label>
+   <label>Cena blachy (zł/m²)<input id="roofPrice" type="number" value="45"></label>
+  </div>
+  <div id="costTotal" class="total"></div>
+  <button id="csvBtn" class="primary full">Pobierz zestawienie CSV</button>
+  <p class="hint warning">To kosztorys poglądowy, nie projekt konstrukcyjny. Nie sprawdza nośności, obciążeń śniegiem i wiatrem ani bezpieczeństwa przekrojów i połączeń. Przed budową wymagane jest sprawdzenie konstrukcji przez uprawnionego konstruktora.</p>
+ </div>
+</aside>
+</div>
+<section class="card bottom"><h2>Projekt i udostępnianie</h2><p>Projekt zapisuje się lokalnie na tym urządzeniu. Użyj „Eksport projektu”, aby przekazać plik bratu. Na jego telefonie otworzy go w WIATOMACIE.</p><div class="bottom-actions"><button id="importBtn">Wczytaj projekt</button><input id="fileInput" type="file" accept=".json,application/json" hidden><button id="installBtn" hidden>Dodaj do ekranu głównego</button><span id="status" aria-live="polite"></span></div></section>
+</main>
+<footer>WIATOMAT • Narzędzie pomocnicze do koncepcji i szacowania materiałów</footer>
+<script type="module" src="app.js"></script>
+</body></html>
