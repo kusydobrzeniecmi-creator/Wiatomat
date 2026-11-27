@@ -1,17 +1,1 @@
-{
-  "name": "WIATOMAT — Projektant wiat",
-  "short_name": "WIATOMAT",
-  "start_url": "./",
-  "display": "standalone",
-  "background_color": "#101713",
-  "theme_color": "#17251f",
-  "description": "Projektant 3D i kalkulator materiałów do wiat",
-  "icons": [
-    {
-      "src": "icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
-  ]
-}
+{"name":"WIATOMAT — Projektant wiat","short_name":"WIATOMAT","start_url":"./","display":"standalone","background_color":"#101713","theme_color":"#17251f","description":"Projektant 3D i kalkulator materiałów do wiat","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}

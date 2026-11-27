@@ -1,91 +1,45 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-const $=id=>document.getElementById(id);
-const stage=$('stage'),scene=new THREE.Scene();scene.background=new THREE.Color(0x1b2a21);
-const camera=new THREE.PerspectiveCamera(42,1,.1,500);camera.position.set(12,10,13);
-const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;stage.appendChild(renderer.domElement);
-const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.target.set(0,1,0);
-scene.add(new THREE.HemisphereLight(0xdcebdc,0x354237,2));
-const sun=new THREE.DirectionalLight(0xffffff,2.2);sun.position.set(7,12,8);sun.castShadow=true;scene.add(sun);
-const grid=new THREE.GridHelper(40,40,0x607767,0x35483b);grid.position.y=-.02;scene.add(grid);
-const wood=new THREE.MeshStandardMaterial({color:0xb78653,roughness:.8}),darkwood=new THREE.MeshStandardMaterial({color:0x8b603a,roughness:.8}),roofmat=new THREE.MeshStandardMaterial({color:0x667b83,metalness:.55,roughness:.4,side:THREE.DoubleSide});
+const $=id=>document.getElementById(id), stage=$('stage'), scene=new THREE.Scene();
+scene.background=new THREE.Color(0x1b2a21);
+const camera=new THREE.PerspectiveCamera(42,1,.1,500); camera.position.set(12,10,13);
+const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap; stage.appendChild(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement); controls.enableDamping=true; controls.target.set(0,1,0);
+scene.add(new THREE.HemisphereLight(0xdcebdc,0x354237,2)); const sun=new THREE.DirectionalLight(0xffffff,2.2); sun.position.set(7,12,8); sun.castShadow=true; scene.add(sun);
+const grid=new THREE.GridHelper(40,40,0x607767,0x35483b); grid.position.y=-.02; scene.add(grid);
+const wood=new THREE.MeshStandardMaterial({color:0xb78653,roughness:.8}), darkwood=new THREE.MeshStandardMaterial({color:0x8b603a,roughness:.8}), roofmat=new THREE.MeshStandardMaterial({color:0x667b83,metalness:.55,roughness:.4,side:THREE.DoubleSide});
 let parts=[],selected=null,explode=0,exploding=false,project={summary:{}};
 const m=v=>Number(v)/100, val=id=>Number($(id)?.value)||0;
 function addBox(name,type,x,y,z,sx,sy,sz,mat=wood,rotX=0){const mesh=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),mat);mesh.position.set(x,y,z);mesh.rotation.x=rotX;mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData={name,type,baseX:x,baseY:y,baseZ:z,baseRotX:rotX};scene.add(mesh);parts.push(mesh);return mesh}
+function resetAnimation(){parts.forEach(p=>p.position.set(p.userData.baseX,p.userData.baseY,p.userData.baseZ));explode=0}
 function clearModel(){for(const p of parts){scene.remove(p);p.geometry.dispose()}parts=[];selected=null;exploding=false;explode=0;$('explodeBtn').textContent='Animacja montażu';updateSelectionUI()}
-function readSpacing(L,cols){
- const raw=$('postSpacings').value.trim();
- if(!raw)return Array.from({length:cols-1},()=>L/(cols-1));
- const vals=raw.split(/[;, ]+/).filter(Boolean).map(Number);
- if(vals.length!==cols-1||vals.some(v=>!Number.isFinite(v)||v<=0))throw Error(`Wpisz dokładnie ${cols-1} dodatnie odstępy (cm), oddzielone przecinkami.`);
- const sum=vals.reduce((a,b)=>a+b,0),lengthCm=val('length');
- if(Math.abs(sum-lengthCm)>1)throw Error(`Suma odstępów wynosi ${sum.toFixed(1)} cm, a długość wiaty ${lengthCm} cm. Popraw wartości.`);
- return vals.map(m);
-}
-function roofGeometry(W){
- if($('roofType').value==='shed'){
-  const hi=m(val('high')),lo=m(val('low'));
-  if(hi<=0||lo<=0)throw Error('Wysokości dachu muszą być większe od zera.');
-  return {type:'shed',leftZ:-W/2,rightZ:W/2,leftY:hi,rightY:lo,segments:[{z1:-W/2,z2:W/2,y1:hi,y2:lo,len:Math.hypot(W,hi-lo)}]};
- }
- const ridge=m(val('ridgeHeight')),le=m(val('leftEave')),re=m(val('rightEave')),ls=m(val('leftSlope')),rs=m(val('rightSlope'));
- if(ridge<=le||ridge<=re)throw Error('Kalenica musi być wyżej niż obie krawędzie dachu.');
- const lrun=Math.sqrt(Math.max(0,ls*ls-(ridge-le)**2)),rrun=Math.sqrt(Math.max(0,rs*rs-(ridge-re)**2));
- if(!lrun||!rrun||Math.abs(lrun+rrun-W)>.025)throw Error(`Połacie i wysokości dają szerokość ${(lrun+rrun)*100|0} cm, a wiata ma ${Math.round(W*100)} cm. Zmień długości połaci lub wysokości.`);
- const rz=-W/2+lrun;
- return {type:'gable',leftZ:-W/2,rightZ:W/2,ridgeZ:rz,leftY:le,rightY:re,ridgeY:ridge,segments:[
-  {z1:-W/2,z2:rz,y1:le,y2:ridge,len:ls},
-  {z1:rz,z2:W/2,y1:ridge,y2:re,len:rs}
- ]};
-}
-function yAt(z,g){if(g.type==='shed')return g.leftY+(g.rightY-g.leftY)*(z+g.leftZ)/(g.rightZ-g.leftZ);if(z<=g.ridgeZ)return g.leftY+(g.ridgeY-g.leftY)*(z-g.leftZ)/(g.ridgeZ-g.leftZ);return g.ridgeY+(g.rightY-g.ridgeY)*(z-g.ridgeZ)/(g.rightZ-g.ridgeZ)}
-function build(){
- try{
-  clearModel();
-  const L=m(val('length')),W=m(val('width')),rows=Math.max(1,Math.min(10,Math.round(val('rows')))),cols=Math.max(2,Math.min(20,Math.round(val('cols'))));
-  if(L<=0||W<=0)throw Error('Podaj prawidłową długość i szerokość wiaty.');
-  const gaps=readSpacing(L,cols),xs=[-L/2];gaps.forEach(g=>xs.push(xs[xs.length-1]+g));const zs=rows===1?[0]:Array.from({length:rows},(_,i)=>-W/2+i*W/(rows-1));
-  const g=roofGeometry(W),ps=m(val('postSize')),bs=m(val('beamSize')),rw=m(val('rafterW')),rh=m(val('rafterH'));
-  zs.forEach((z,ri)=>xs.forEach((x,ci)=>{const h=yAt(z,g)-bs/2;addBox(`Słup R${ri+1}/S${ci+1}`,'Słup',x,h/2,z,ps,h,ps,darkwood)}));
-  zs.forEach((z,ri)=>{const h=yAt(z,g);addBox(`Belka podłużna ${ri+1}`,'Belka',0,h-bs/2,z,L,bs,bs,darkwood)});
-  const step=Math.max(.3,m(val('rafterStep'))),n=Math.max(1,Math.ceil(L/step));
-  for(let i=0;i<=n;i++){const x=-L/2+i*L/n;g.segments.forEach((s,j)=>{const dz=s.z2-s.z1,dy=s.y2-s.y1,len=Math.hypot(dz,dy),angle=Math.atan2(dz,dy);addBox(`Krokiew ${i+1}${g.segments.length>1?(j===0?' L':' P'):''}`,'Krokiew',x,(s.y1+s.y2)/2,(s.z1+s.z2)/2,rw,len,rh,wood,angle)})}
-  const bstep=Math.max(.15,m(val('battenStep')));
-  g.segments.forEach((s,j)=>{const count=Math.max(1,Math.ceil(s.len/bstep));for(let i=0;i<=count;i++){const t=i/count,z=s.z1+(s.z2-s.z1)*t,y=s.y1+(s.y2-s.y1)*t,angle=Math.atan2(s.z2-s.z1,s.y2-s.y1);addBox(`Łata ${j+1}.${i+1}`,'Łata',0,y+.045*Math.cos(angle),z-.045*Math.sin(angle),L,.045,.05,darkwood,angle)}});
-  g.segments.forEach(s=>{const angle=Math.atan2(s.z2-s.z1,s.y2-s.y1),roof=addBox('Pokrycie dachu','Pokrycie',0,(s.y1+s.y2)/2+.10,(s.z1+s.z2)/2,L,.035,s.len,roofmat,angle);roof.castShadow=false});
-  const maxDim=Math.max(L,W);camera.position.set(maxDim*1.35,Math.max(6,maxDim*.9),maxDim*1.5);controls.target.set(0,(Math.max(g.leftY,g.rightY,g.ridgeY||0)+Math.min(g.leftY,g.rightY))/2,0);controls.update();
-  $('loading').style.display='none';applyVisibility();updateSummary(g);
- }catch(e){$('loading').style.display='none';$('status').textContent=e.message;alert(e.message)}
-}
+function readSpacing(L,cols){const raw=$('postSpacings').value.trim();if(!raw)return Array.from({length:cols-1},()=>L/(cols-1));const vals=raw.split(/[;, ]+/).filter(Boolean).map(Number);if(vals.length!==cols-1||vals.some(v=>!Number.isFinite(v)||v<=0))throw Error(`Wpisz dokładnie ${cols-1} dodatnie odstępy (cm), oddzielone przecinkami.`);const sum=vals.reduce((a,b)=>a+b,0),lengthCm=val('length');if(Math.abs(sum-lengthCm)>1)throw Error(`Suma odstępów wynosi ${sum.toFixed(1)} cm, a długość wiaty ${lengthCm} cm. Popraw wartości.`);return vals.map(m)}
+function roofGeometry(W,over){if($('roofType').value==='shed'){const hi=m(val('high')),lo=m(val('low'));if(hi<=0||lo<=0)throw Error('Wysokości dachu muszą być większe od zera.');const slope=(lo-hi)/W,z1=-W/2-over,z2=W/2+over,y1=hi-slope*over,y2=lo+slope*over;return {type:'shed',leftZ:z1,rightZ:z2,leftY:y1,rightY:y2,segments:[{z1,z2,y1,y2,len:Math.hypot(z2-z1,y2-y1)}]}}
+const ridge=m(val('ridgeHeight')),le=m(val('leftEave')),re=m(val('rightEave')),ls=m(val('leftSlope')),rs=m(val('rightSlope'));if(ridge<=le||ridge<=re)throw Error('Kalenica musi być wyżej niż obie krawędzie dachu.');const lrun=Math.sqrt(Math.max(0,ls*ls-(ridge-le)**2)),rrun=Math.sqrt(Math.max(0,rs*rs-(ridge-re)**2));if(!lrun||!rrun||Math.abs(lrun+rrun-W)>.025)throw Error(`Połacie i wysokości dają szerokość ${(lrun+rrun)*100|0} cm, a wiata ma ${Math.round(W*100)} cm. Zmień długości połaci lub wysokości.`);const rz=-W/2+lrun,z1=-W/2-over,z2=W/2+over,y1=le-(ridge-le)/lrun*over,y2=re-(ridge-re)/rrun*over;return {type:'gable',leftZ:z1,rightZ:z2,ridgeZ:rz,leftY:y1,rightY:y2,ridgeY:ridge,segments:[{z1,z2:rz,y1,y2:ridge,len:Math.hypot(rz-z1,ridge-y1)},{z1:rz,z2,y1:ridge,y2:y2,len:Math.hypot(z2-rz,y2-ridge)}]}}
+function yAt(z,g){if(g.type==='shed')return g.leftY+(g.rightY-g.leftY)*(z-g.leftZ)/(g.rightZ-g.leftZ);if(z<=g.ridgeZ)return g.leftY+(g.ridgeY-g.leftY)*(z-g.leftZ)/(g.ridgeZ-g.leftZ);return g.ridgeY+(g.rightY-g.ridgeY)*(z-g.ridgeZ)/(g.rightZ-g.ridgeZ)}
+function build(){let L,W,rows,cols,gaps,g,front,back,side,ps,bs,rw,rh;try{L=m(val('length'));W=m(val('width'));rows=Math.max(1,Math.min(10,Math.round(val('rows'))));cols=Math.max(2,Math.min(20,Math.round(val('cols'))));if(L<=0||W<=0)throw Error('Podaj prawidłową długość i szerokość wiaty.');gaps=readSpacing(L,cols);side=m(val('overSide'));front=m(val('overFront'));back=m(val('overBack'));if(side<0||front<0||back<0)throw Error('Wysięgi okapu nie mogą być ujemne.');g=roofGeometry(W,side);ps=m(val('postSize'));bs=m(val('beamSize'));rw=m(val('rafterW'));rh=m(val('rafterH'));}catch(e){$('loading').style.display='none';$('status').textContent=e.message;alert(e.message);return}
+clearModel();const xs=[-L/2];gaps.forEach(v=>xs.push(xs[xs.length-1]+v));const zs=rows===1?[0]:Array.from({length:rows},(_,i)=>-W/2+i*W/(rows-1));
+zs.forEach((z,ri)=>xs.forEach((x,ci)=>{const h=yAt(z,g)-bs/2;addBox(`Słup R${ri+1}/S${ci+1}`,'Słup',x,h/2,z,ps,h,ps,darkwood)}));
+zs.forEach((z,ri)=>{const h=yAt(z,g);addBox(`Belka podłużna ${ri+1}`,'Belka',0,h-bs/2,z,L,bs,bs,darkwood)});
+const roofL=L+front+back,xStart=-L/2-back,step=Math.max(.3,m(val('rafterStep'))),n=Math.max(1,Math.ceil(roofL/step));
+for(let i=0;i<=n;i++){const x=xStart+i*roofL/n;g.segments.forEach((s,j)=>{const dz=s.z2-s.z1,dy=s.y2-s.y1,len=Math.hypot(dz,dy),angle=Math.atan2(dz,dy);addBox(`Krokiew ${i+1}${g.segments.length>1?(j===0?' L':' P'):''}`,'Krokiew',x,(s.y1+s.y2)/2,(s.z1+s.z2)/2,rw,len,rh,wood,angle)})}
+const bstep=Math.max(.15,m(val('battenStep')));g.segments.forEach((s,j)=>{const count=Math.max(1,Math.ceil(s.len/bstep));for(let i=0;i<=count;i++){const t=i/count,z=s.z1+(s.z2-s.z1)*t,y=s.y1+(s.y2-s.y1)*t,angle=Math.atan2(s.z2-s.z1,s.y2-s.y1);addBox(`Łata ${j+1}.${i+1}`,'Łata',0,y+.045*Math.cos(angle),z-.045*Math.sin(angle),roofL,.045,.05,darkwood,angle)}});
+g.segments.forEach(s=>{const angle=-Math.atan2(s.y2-s.y1,s.z2-s.z1),roof=addBox('Pokrycie dachu','Pokrycie',0,(s.y1+s.y2)/2+.10,(s.z1+s.z2)/2,roofL,.035,s.len,roofmat,angle);roof.castShadow=false});
+const maxDim=Math.max(roofL,W+2*side);camera.position.set(maxDim*1.35,Math.max(6,maxDim*.9),maxDim*1.5);controls.target.set(0,(Math.max(g.leftY,g.rightY,g.ridgeY||0)+Math.min(g.leftY,g.rightY))/2,0);controls.update();$('loading').style.display='none';applyVisibility();updateSummary(g,roofL)}
 function applyVisibility(){const map={Słup:'showPosts',Belka:'showBeams',Krokiew:'showRafters',Łata:'showBattens'};parts.forEach(p=>{const id=map[p.userData.type];p.visible=id?$(id).checked:true})}
 function choose(obj){if(selected)selected.material.emissive?.setHex(0);selected=obj;if(selected.material.emissive)selected.material.emissive.setHex(0x443311);updateSelectionUI()}
 function updateSelectionUI(){const yes=!!selected;$('noSelection').hidden=yes;$('elementEditor').hidden=!yes;$('selectedLabel').textContent=yes?selected.userData.name:'Nie wybrano elementu';if(yes){$('elementName').textContent=selected.userData.name;$('posX').value=(selected.position.x*100).toFixed(1);$('posY').value=(selected.position.y*100).toFixed(1);$('posZ').value=(selected.position.z*100).toFixed(1);$('offsetZ').value=0}}
-const ray=new THREE.Raycaster(),pointer=new THREE.Vector2();let down=null;
-renderer.domElement.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);
-renderer.domElement.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;const r=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height*2-1));ray.setFromCamera(pointer,camera);const hit=ray.intersectObjects(parts.filter(p=>p.visible));if(hit.length)choose(hit[0].object)});
-$('applyMove').onclick=()=>{if(!selected)return;selected.position.set(val('posX')/100,val('posY')/100+val('offsetZ')/100,val('posZ')/100);updateSelectionUI()};
-$('duplicateBtn').onclick=()=>{if(!selected)return;const c=selected.clone();c.geometry=selected.geometry.clone();c.position.x+=.35;c.userData={...selected.userData,name:selected.userData.name+' — kopia'};scene.add(c);parts.push(c);choose(c)};
-$('buildBtn').onclick=build;
-['showPosts','showBeams','showRafters','showBattens'].forEach(id=>$(id).onchange=applyVisibility);
-document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab,.panel').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active')});
-$('roofType').onchange=()=>{const g=$('roofType').value==='gable';$('shedFields').hidden=g;$('gableFields').hidden=!g};
-$('resetView').onclick=()=>{camera.position.set(12,10,13);controls.target.set(0,1,0);controls.update()};
-$('explodeBtn').onclick=()=>{if(exploding){exploding=false;explode=0;parts.forEach(p=>p.position.set(p.userData.baseX,p.userData.baseY,p.userData.baseZ));$('explodeBtn').textContent='Animacja montażu'}else{explode=0;parts.forEach(p=>p.position.set(p.userData.baseX,p.userData.baseY,p.userData.baseZ));exploding=true;$('explodeBtn').textContent='Zatrzymaj animację'}};
-function animate(){requestAnimationFrame(animate);if(exploding){explode=Math.min(1,explode+.012);parts.forEach(p=>{const t=p.userData.type,amount=t==='Pokrycie'?2:t==='Łata'?1.5:t==='Krokiew'?1:0;p.position.y=p.userData.baseY+explode*amount;if(explode>=1)exploding=false});if(!exploding)$('explodeBtn').textContent='Powtórz animację'}controls.update();renderer.render(scene,camera)}animate();
+const ray=new THREE.Raycaster(),pointer=new THREE.Vector2();let down=null;renderer.domElement.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);renderer.domElement.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;const r=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height*2-1));ray.setFromCamera(pointer,camera);const hit=ray.intersectObjects(parts.filter(p=>p.visible));if(hit.length)choose(hit[0].object)});
+$('applyMove').onclick=()=>{if(!selected)return;selected.position.set(val('posX')/100,val('posY')/100+val('offsetZ')/100,val('posZ')/100);updateSelectionUI()};$('duplicateBtn').onclick=()=>{if(!selected)return;const c=selected.clone();c.geometry=selected.geometry.clone();c.position.x+=.35;c.userData={...selected.userData,name:selected.userData.name+' — kopia'};scene.add(c);parts.push(c);choose(c)};
+$('buildBtn').onclick=build;['showPosts','showBeams','showRafters','showBattens'].forEach(id=>$(id).onchange=applyVisibility);document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab,.panel').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active')});$('roofType').onchange=()=>{const isGable=$('roofType').value==='gable';$('shedFields').hidden=isGable;$('gableFields').hidden=!isGable};$('resetView').onclick=()=>{camera.position.set(12,10,13);controls.target.set(0,1,0);controls.update()};
+$('explodeBtn').onclick=()=>{if(exploding){resetAnimation();exploding=false;$('explodeBtn').textContent='Animacja montażu'}else{resetAnimation();exploding=true;$('explodeBtn').textContent='Zatrzymaj animację'}};
+function animate(){requestAnimationFrame(animate);if(exploding){explode=Math.min(1,explode+.012);parts.forEach(p=>{const t=p.userData.type,amount=t==='Pokrycie'?2:t==='Łata'?1.5:t==='Krokiew'?1:0;p.position.y=p.userData.baseY+explode*amount});if(explode>=1){exploding=false;$('explodeBtn').textContent='Powtórz animację'}}controls.update();renderer.render(scene,camera)}animate();
 function resize(){const w=stage.clientWidth,h=stage.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h)}new ResizeObserver(resize).observe(stage);resize();
-function updateSummary(g){const L=m(val('length')),W=m(val('width')),rows=val('rows'),cols=val('cols'),postN=rows*cols,ps=m(val('postSize')),bs=m(val('beamSize')),rw=m(val('rafterW')),rh=m(val('rafterH')),step=Math.max(.3,m(val('rafterStep'))),rN=Math.ceil(L/step)+1;
- const rLen=g.segments.reduce((a,s)=>a+s.len,0),rVol=rN*rw*rh*rLen,postVol=postN*ps*ps*(g.segments.reduce((a,s)=>a+(s.y1+s.y2)/2,0)/g.segments.length),beamVol=rows*L*bs*bs,batN=g.segments.reduce((a,s)=>a+Math.ceil(s.len/Math.max(.15,m(val('battenStep'))))+1,0),batVol=batN*L*.045*.05,roofArea=L*rLen,vol=postVol+beamVol+rVol+batVol,woodCost=vol*(1+val('waste')/100)*val('woodPrice'),roofCost=roofArea*val('roofPrice');
- project.summary={postN,vol,roofArea,woodCost,roofCost,total:woodCost+roofCost,rN,batN};$('summary').innerHTML=[['Słupy',`${postN} szt.`],['Krokwie',`${rN*g.segments.length} szt. (orientacyjnie)`],['Łaty',`${batN} szt. (orientacyjnie)`],['Objętość drewna',`${vol.toFixed(3)} m³`],['Powierzchnia dachu',`${roofArea.toFixed(1)} m²`]].map(([a,b])=>`<div class="sumrow"><span>${a}</span><b>${b}</b></div>`).join('');$('costTotal').textContent=`Szacunkowo: ${(woodCost+roofCost).toFixed(0)} zł`}
-['woodPrice','waste','roofPrice'].forEach(id=>$(id).addEventListener('input',()=>{try{updateSummary(roofGeometry(m(val('width'))))}catch{}}));
-function getProject(){const ids=['length','width','rows','cols','postSpacings','roofType','high','low','ridgeHeight','leftSlope','leftEave','rightSlope','rightEave','postSize','beamSize','rafterW','rafterH','rafterStep','battenStep','woodPrice','waste','roofPrice'];const settings={};ids.forEach(id=>settings[id]=$(id).value);return {app:'WIATOMAT',version:2,created:new Date().toISOString(),settings}}
+function updateSummary(g,roofL){const L=m(val('length')),W=m(val('width')),rows=val('rows'),cols=val('cols'),postN=rows*cols,ps=m(val('postSize')),bs=m(val('beamSize')),rw=m(val('rafterW')),rh=m(val('rafterH')),step=Math.max(.3,m(val('rafterStep'))),rN=Math.ceil(roofL/step)+1,rLen=g.segments.reduce((a,s)=>a+s.len,0),rVol=rN*rw*rh*rLen,postVol=postN*ps*ps*(g.segments.reduce((a,s)=>a+(s.y1+s.y2)/2,0)/g.segments.length),beamVol=rows*L*bs*bs,batN=g.segments.reduce((a,s)=>a+Math.ceil(s.len/Math.max(.15,m(val('battenStep'))))+1,0),batVol=batN*roofL*.045*.05,roofArea=roofL*rLen,vol=postVol+beamVol+rVol+batVol,woodCost=vol*(1+val('waste')/100)*val('woodPrice'),roofCost=roofArea*val('roofPrice');project.summary={postN,vol,roofArea,woodCost,roofCost,total:woodCost+roofCost,rN,batN};$('summary').innerHTML=[['Słupy',`${postN} szt.`],['Krokwie',`${rN*g.segments.length} szt. (orientacyjnie)`],['Łaty',`${batN} szt. (orientacyjnie)`],['Objętość drewna',`${vol.toFixed(3)} m³`],['Powierzchnia dachu',`${roofArea.toFixed(1)} m²`]].map(([a,b])=>`<div class="sumrow"><span>${a}</span><b>${b}</b></div>`).join('');$('costTotal').textContent=`Szacunkowo: ${(woodCost+roofCost).toFixed(0)} zł`}
+['woodPrice','waste','roofPrice'].forEach(id=>$(id).addEventListener('input',()=>{try{updateSummary(roofGeometry(m(val('width')),m(val('overSide'))),m(val('length'))+m(val('overFront'))+m(val('overBack')))}catch{}}));
+function getProject(){const ids=['length','width','rows','cols','postSpacings','roofType','high','low','ridgeHeight','leftSlope','leftEave','rightSlope','rightEave','overSide','overFront','overBack','postSize','beamSize','rafterW','rafterH','rafterStep','battenStep','woodPrice','waste','roofPrice'];const settings={};ids.forEach(id=>settings[id]=$(id).value);return {app:'WIATOMAT',version:3,created:new Date().toISOString(),settings}}
 function applyProject(data){if(!data?.settings)throw Error('Nieprawidłowy plik projektu');Object.entries(data.settings).forEach(([k,v])=>{if($(k))$(k).value=v});$('roofType').onchange();build();$('status').textContent='Wczytano projekt.'}
 function download(name,content,type){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([content],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-$('saveBtn').onclick=()=>{localStorage.setItem('wiatomat-project',JSON.stringify(getProject()));$('status').textContent='Zapisano projekt na tym urządzeniu.'};
-$('exportBtn').onclick=()=>download('wiatomat-projekt.json',JSON.stringify(getProject(),null,2),'application/json');
-$('importBtn').onclick=()=>$('fileInput').click();
-$('fileInput').onchange=async e=>{try{applyProject(JSON.parse(await e.target.files[0].text()))}catch(err){$('status').textContent='Nie udało się wczytać pliku: '+err.message}};
+$('saveBtn').onclick=()=>{localStorage.setItem('wiatomat-project',JSON.stringify(getProject()));$('status').textContent='Zapisano projekt na tym urządzeniu.'};$('exportBtn').onclick=()=>download('wiatomat-projekt.json',JSON.stringify(getProject(),null,2),'application/json');$('importBtn').onclick=()=>$('fileInput').click();$('fileInput').onchange=async e=>{try{applyProject(JSON.parse(await e.target.files[0].text()))}catch(err){$('status').textContent='Nie udało się wczytać pliku: '+err.message}};
 $('csvBtn').onclick=()=>{const s=project.summary,csv='Pozycja;Wartość\nSłupy;'+s.postN+' szt.\nDrewno;'+s.vol.toFixed(3)+' m3\nDach;'+s.roofArea.toFixed(1)+' m2\nKoszt drewna;'+s.woodCost.toFixed(2)+' zł\nKoszt pokrycia;'+s.roofCost.toFixed(2)+' zł\nRazem;'+s.total.toFixed(2)+' zł';download('wiatomat-zestawienie.csv','\ufeff'+csv,'text/csv;charset=utf-8')};
-const saved=localStorage.getItem('wiatomat-project');if(saved){try{applyProject(JSON.parse(saved))}catch{}}
-build();
-let installPrompt;$('installBtn').hidden=true;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('installBtn').hidden=false});$('installBtn').onclick=async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null}};
-if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+const saved=localStorage.getItem('wiatomat-project');if(saved){try{applyProject(JSON.parse(saved))}catch{}}build();let installPrompt;$('installBtn').hidden=true;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('installBtn').hidden=false});$('installBtn').onclick=async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null}};if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
